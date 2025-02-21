@@ -11,16 +11,35 @@ class ScannerPage extends StatefulWidget {
 
 class _ScannerPageState extends State<ScannerPage> {
   List<Product> products = []; // Lista de productos
-  double totalPrice = 0.0; // Total de precios
+  double totalPrice = 0.0; // Total de
+  double sobrante = 0.0; // Total de
+  String barcodeScanRes = "";
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Agregar listener al controlador para calcular automáticamente al cambiar el texto
+    _controller.addListener(updateSobrante);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose(); // Limpia el controlador
+    _focusNode.dispose(); // Limpia el FocusNode
+    super.dispose();
+  }
+
+  void _removeFocus() {
+    _focusNode.unfocus(); // Quita el foco del TextField
+  }
 
   Future<void> scanBarcode() async {
-    String barcodeScanRes;
     try {
       var result = await BarcodeScanner.scan();
-      barcodeScanRes = result.rawContent;
       setState(() {
-        products.add(Product(barcodeScanRes, 1, 1));
-        totalPrice += 10.0;
+        barcodeScanRes = result.rawContent;
       });
     } catch (e) {
       barcodeScanRes = 'Error al escanear';
@@ -32,6 +51,16 @@ class _ScannerPageState extends State<ScannerPage> {
       products.add(Product(name, price, quantity));
       totalPrice += price * quantity;
     });
+    updateSobrante();
+  }
+
+  void updateSobrante() {
+    if (_controller.text.isNotEmpty) {
+      sobrante = double.parse(_controller.text) - totalPrice;
+    } else {
+      sobrante = 0.0;
+    }
+    setState(() {});
   }
 
   // Muestra un cuadro de diálogo para agregar productos manualmente
@@ -166,6 +195,7 @@ class _ScannerPageState extends State<ScannerPage> {
       products[index] = Product(name, price, quantity); // Actualiza el producto
       totalPrice += price * quantity; // Suma el nuevo precio
     });
+    updateSobrante();
   }
 
   void deleteProduct(int index) {
@@ -175,6 +205,7 @@ class _ScannerPageState extends State<ScannerPage> {
               .quantity; // Resta el precio del producto que se elimina
       products.removeAt(index); // Elimina el producto de la lista
     });
+    updateSobrante();
   }
 
   void undoDelete(Product product, int index) {
@@ -182,6 +213,7 @@ class _ScannerPageState extends State<ScannerPage> {
       products.insert(index, product); // Reagrega el producto eliminado
       totalPrice += product.price * product.quantity; // Restaura el total
     });
+    updateSobrante();
   }
 
   @override
@@ -190,6 +222,11 @@ class _ScannerPageState extends State<ScannerPage> {
       appBar: AppBar(
         title: const Text('Bar Code Market'),
       ),
+      floatingActionButton: FloatingActionButton(
+          onPressed: showAddProductDialog,
+          backgroundColor: Colors.blue,
+          shape: CircleBorder(),
+          child: Icon(Icons.add, color: Colors.white)),
       body: Column(
         children: [
           ElevatedButton(
@@ -198,16 +235,42 @@ class _ScannerPageState extends State<ScannerPage> {
             },
             child: const Text('Escanear Código de Barras'),
           ),
+          Text("Barcode: $barcodeScanRes"),
           ElevatedButton(
             onPressed: showAddProductDialog,
             child: const Text('Agregar Producto Manualmente'),
           ),
           const SizedBox(height: 20),
-          Row(
-            children: [
-              Text('Total: \$${totalPrice.toStringAsFixed(2)}'),
-            ],
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _controller,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    focusNode: _focusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Presupuesto',
+                      labelStyle: TextStyle(fontSize: 12),
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                          vertical: 4.0, horizontal: 8.0), // Ajusta el padding
+                    ),
+                    style: TextStyle(
+                        fontSize: 16.0), // Ajusta el tamaño de la fuente
+                  ),
+                ),
+                Text('Total: \$${totalPrice.toStringAsFixed(2)}'),
+                Text('Sobrante: \$${sobrante.toStringAsFixed(2)}'),
+              ],
+            ),
           ),
+          Divider(),
           Expanded(
             child: ListView.builder(
               itemCount: products.length,
@@ -266,13 +329,21 @@ class _ScannerPageState extends State<ScannerPage> {
                       ),
                     );
                   },
-                  child: ListTile(
-                    title: Text(products[index].name),
-                    subtitle: Text('Cantidad: ${products[index].quantity}'),
-                    trailing: Text(
-                        '\$${(products[index].price * products[index].quantity).toStringAsFixed(2)}'),
-                    onTap: () => showEditProductDialog(products[index],
-                        index), // Abre el diálogo al tocar el producto
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    child: ListTile(
+                      title: Text(products[index].name),
+                      subtitle: Text(
+                          'Precio: \$${products[index].price} - Cantidad: ${products[index].quantity}'),
+                      trailing: Text(
+                          'Subtotal: \$${(products[index].price * products[index].quantity).toStringAsFixed(2)}'),
+                      onTap: () => showEditProductDialog(products[index],
+                          index), // Abre el diálogo al tocar el producto
+                    ),
                   ),
                 );
               },
